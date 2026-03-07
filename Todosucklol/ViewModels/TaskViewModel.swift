@@ -97,7 +97,7 @@ class TaskViewModel: ObservableObject {
         let request = CreateCommentRequest(
             content: content,
             ownerId: currentUserId,
-            taskId: <#UUID#>
+            taskId: taskId
             
         )
         
