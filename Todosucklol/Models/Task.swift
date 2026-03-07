@@ -29,4 +29,5 @@ struct CreateTaskRequest: Codable {
 struct CreateCommentRequest: Codable {
     let content: String
     let ownerId: UUID
+    let taskId: UUID
 }
