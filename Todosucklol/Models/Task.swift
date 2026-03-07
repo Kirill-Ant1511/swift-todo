@@ -19,8 +19,14 @@ struct TaskItem: Identifiable, Codable {
     let comments: [Comment]
 }
 
+
 struct CreateTaskRequest: Codable {
     let title: String
     let description: String?
+    let ownerId: UUID
+}
+
+struct CreateCommentRequest: Codable {
+    let content: String
     let ownerId: UUID
 }

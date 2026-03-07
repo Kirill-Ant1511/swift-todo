@@ -91,10 +91,79 @@ class TaskViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Комментарии (локальное управление)
+    
+    func addCommentToTask(taskId: UUID, content: String) async {
+        let request = CreateCommentRequest(
+            content: content,
+            ownerId: currentUserId
+        )
+        
+        do {
+            // Отправляем на сервер
+            let newComment = try await apiClient.addComment(to: taskId, request)
+            
+            // Обновляем локально с комментарием с сервера
+            if let index = tasks.firstIndex(where: { $0.id == taskId }) {
+                let oldTask = tasks[index]
+                var comments = oldTask.comments
+                comments.append(newComment)
+                
+                let updatedTask = TaskItem(
+                    id: oldTask.id,
+                    createdAt: oldTask.createdAt,
+                    title: oldTask.title,
+                    description: oldTask.description,
+                    ownerId: oldTask.ownerId,
+                    ownerName: oldTask.ownerName,
+                    performBy: oldTask.performBy,
+                    isDone: oldTask.isDone,
+                    comments: comments
+                )
+                tasks[index] = updatedTask
+            }
+        } catch {
+            print("❌ Error adding comment: \(error)")
+            errorMessage = "Не удалось добавить комментарий"
+        }
+    }
+
+    /// Удалить комментарий из задачи (через API)
+    func removeCommentFromTask(taskId: UUID, commentId: UUID) async {
+        do {
+            // Удаляем на сервере
+            try await apiClient.deleteComment(commentId, from: taskId)
+            
+            // Обновляем локально
+            if let index = tasks.firstIndex(where: { $0.id == taskId }) {
+                let oldTask = tasks[index]
+                let filteredComments = oldTask.comments.filter { $0.id != commentId }
+                
+                let updatedTask = TaskItem(
+                    id: oldTask.id,
+                    createdAt: oldTask.createdAt,
+                    title: oldTask.title,
+                    description: oldTask.description,
+                    ownerId: oldTask.ownerId,
+                    ownerName: oldTask.ownerName,
+                    performBy: oldTask.performBy,
+                    isDone: oldTask.isDone,
+                    comments: filteredComments
+                )
+                tasks[index] = updatedTask
+            }
+        } catch {
+            print("❌ Error deleting comment: \(error)")
+            errorMessage = "Не удалось удалить комментарий"
+            // Перезагружаем задачи для синхронизации
+            loadTasks()
+        }
+    }
+    
     // MARK: - Переключение статуса задачи
     
     func toggleTaskDone(_ task: TaskItem) {
-        // Создаём обновлённую задачу
+        // ✅ Создаём обновлённую задачу с инвертированным isDone
         let updatedTask = TaskItem(
             id: task.id,
             createdAt: task.createdAt,
@@ -103,18 +172,18 @@ class TaskViewModel: ObservableObject {
             ownerId: task.ownerId,
             ownerName: task.ownerName,
             performBy: task.performBy,
-            isDone: !task.isDone,  // Инвертируем статус
+            isDone: !task.isDone,
             comments: task.comments
         )
         
-        // Обновляем локально
+        // ✅ Обновляем локально с анимацией
         if let index = self.tasks.firstIndex(where: { $0.id == task.id }) {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 self.tasks[index] = updatedTask
             }
         }
         
-        // Отправляем на сервер
+        // ✅ Отправляем обновление на сервер
         Task {
             do {
                 let request = CreateTaskRequest(
@@ -124,7 +193,7 @@ class TaskViewModel: ObservableObject {
                 )
                 let serverTask = try await apiClient.updateTask(id: updatedTask.id, request)
                 
-                // Обновляем данными с сервера
+                // ✅ Обновляем данными с сервера
                 if let index = self.tasks.firstIndex(where: { $0.id == serverTask.id }) {
                     self.tasks[index] = serverTask
                 }
