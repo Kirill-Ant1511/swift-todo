@@ -33,7 +33,6 @@ class APIClient {
         self.decoder = JSONDecoder()
         
         // ✅ Формат даты из API: "2026-03-07T19:06:47.836541"
-        // ISO8601 с микросекундами, но без timezone
         let dateFormatter = DateFormatter()
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
         dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
@@ -43,12 +42,10 @@ class APIClient {
             let container = try decoder.singleValueContainer()
             let dateString = try container.decode(String.self)
             
-            // 1. Попробуем формат с микросекундами: "2026-03-07T19:06:47.836541"
             if let date = dateFormatter.date(from: dateString) {
                 return date
             }
             
-            // 2. Попробуем без микросекунд: "2026-03-07T19:06:47"
             let simpleFormatter = DateFormatter()
             simpleFormatter.locale = Locale(identifier: "en_US_POSIX")
             simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
@@ -58,19 +55,16 @@ class APIClient {
                 return date
             }
             
-            // 3. Попробуем ISO8601 с timezone: "2026-03-07T19:06:47Z"
             if let date = ISO8601DateFormatter().date(from: dateString) {
                 return date
             }
             
-            // 4. Попробуем ISO8601 с milliseconds: "2026-03-07T19:06:47.836Z"
             let isoFormatter = ISO8601DateFormatter()
             isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             if let date = isoFormatter.date(from: dateString) {
                 return date
             }
             
-            // Если ничего не подошло — ошибка
             throw DecodingError.dataCorruptedError(
                 in: container,
                 debugDescription: "Cannot decode date: \(dateString)"
@@ -189,6 +183,63 @@ class APIClient {
     
     func deleteTask(id: UUID) async throws {
         guard let url = URL(string: "\(baseURL)/\(id.uuidString)") else {
+            throw APIError.invalidURL
+        }
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "DELETE"
+        
+        let (_, response) = try await session.data(for: urlRequest)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.noData
+        }
+        
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw APIError.serverError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Комментарии
+    
+    /// Добавить комментарий к задаче
+    /// POST /api/task/{taskId}/comment
+    func addComment(to taskId: UUID, _ request: CreateCommentRequest) async throws -> Comment {
+        guard let url = URL(string: "\(baseURL)/\(taskId.uuidString)/comment") else {
+            throw APIError.invalidURL
+        }
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try encoder.encode(request)
+        
+        let (data, response) = try await session.data(for: urlRequest)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.noData
+        }
+        
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw APIError.serverError(httpResponse.statusCode)
+        }
+        
+        do {
+            // ✅ Возвращаем Comment (совместим с массивом comments)
+            return try decoder.decode(Comment.self, from: data)
+        } catch {
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("❌ Raw response: \(jsonString)")
+            }
+            print("❌ Decoding error: \(error)")
+            throw APIError.decodingError
+        }
+    }
+    
+    /// Удалить комментарий
+    /// DELETE /api/task/{taskId}/comment/{commentId}
+    func deleteComment(_ commentId: UUID, from taskId: UUID) async throws {
+        guard let url = URL(string: "\(baseURL)/\(taskId.uuidString)/comment/\(commentId.uuidString)") else {
             throw APIError.invalidURL
         }
         

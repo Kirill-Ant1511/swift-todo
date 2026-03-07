@@ -1,5 +1,5 @@
 import SwiftUI
-import Foundation
+
 struct TaskRow: View {
     let task: TaskItem
     @ObservedObject var viewModel: TaskViewModel
@@ -7,9 +7,13 @@ struct TaskRow: View {
     @State private var showingEditDescription = false
     @State private var isExpanded = false
     
+    private let currentUserId = UUID()
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // 🔽 Верхняя строка: чекбокс + текст + кнопка редактирования
             HStack(alignment: .top, spacing: 10) {
+                // Кнопка выполнения задачи
                 Button {
                     let impact = UIImpactFeedbackGenerator(style: .light)
                     impact.impactOccurred()
@@ -23,6 +27,7 @@ struct TaskRow: View {
                 }
                 .buttonStyle(.plain)
                 
+                // 🔽 Текст задачи
                 VStack(alignment: .leading, spacing: 4) {
                     Text(task.title)
                         .font(.body.bold())
@@ -30,6 +35,7 @@ struct TaskRow: View {
                         .foregroundColor(task.isDone ? .gray : .primary)
                         .animation(.easeInOut(duration: 0.2), value: task.isDone)
                     
+                    // Описание (сокращённое)
                     if let desc = task.description, !desc.isEmpty {
                         Text(desc)
                             .font(.caption)
@@ -38,6 +44,7 @@ struct TaskRow: View {
                             .lineLimit(isExpanded ? nil : 2)
                     }
                     
+                    // Бейдж с количеством комментариев
                     if !task.comments.isEmpty {
                         HStack(spacing: 4) {
                             Image(systemName: "bubble.left.fill")
@@ -56,6 +63,7 @@ struct TaskRow: View {
                 
                 Spacer()
                 
+                // Кнопка редактирования
                 Button {
                     showingEdit = true
                 } label: {
@@ -65,6 +73,7 @@ struct TaskRow: View {
                 }
                 .buttonStyle(.plain)
             }
+            // 🔽 Карточка задачи
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
@@ -78,8 +87,10 @@ struct TaskRow: View {
                 }
             }
             
+            // 🔽 Развёрнутая секция (описание + комментарии)
             if isExpanded {
                 VStack(alignment: .leading, spacing: 10) {
+                    // Полное описание с кнопкой редактирования
                     if let desc = task.description, !desc.isEmpty {
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "text.alignleft")
@@ -108,8 +119,10 @@ struct TaskRow: View {
                     
                     Divider()
                     
-                    CommentInputView(task: task)
+                    // Поле ввода комментария
+                    CommentInputView(task: task, viewModel: viewModel)
                     
+                    // Список комментариев
                     if !task.comments.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(task.comments) { comment in
@@ -127,6 +140,24 @@ struct TaskRow: View {
                                         }
                                     }
                                     Spacer()
+                                    
+                                    // Кнопка удаления (только для своих комментариев)
+                                    if comment.ownerId == currentUserId {
+                                        Button {
+                                            Task {
+                                                await viewModel.removeCommentFromTask(
+                                                    taskId: task.id,
+                                                    commentId: comment.id
+                                                )
+                                            }
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundColor(.red.opacity(0.7))
+                                                .font(.caption)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .transition(.scale.combined(with: .opacity))
+                                    }
                                 }
                                 .padding(.vertical, 2)
                                 .transition(.opacity.combined(with: .move(edge: .leading)))
@@ -147,8 +178,10 @@ struct TaskRow: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        // 🔽 Общие отступы строки
         .padding(.horizontal, 2)
         .padding(.vertical, 1)
+        // 🔽 Sheets для редактирования
         .sheet(isPresented: $showingEdit) {
             EditTaskView(task: task, viewModel: viewModel)
         }
@@ -156,4 +189,34 @@ struct TaskRow: View {
             EditDescriptionView(task: task, viewModel: viewModel)
         }
     }
+}
+
+#Preview {
+    TaskRow(
+        task: TaskItem(
+            id: UUID(),
+            createdAt: Date(),
+            title: "Тестовая задача",
+            description: "Описание для предпросмотра",
+            ownerId: UUID(),
+            ownerName: "Иван",
+            performBy: nil,
+            isDone: false,
+            comments: [
+                Comment(
+                    id: UUID(),
+                    ownerId: UUID(),
+                    ownerName: "Иван",
+                    content: "Тестовый комментарий"
+                ),
+                Comment(
+                    id: UUID(),
+                    ownerId: UUID(),
+                    ownerName: "Вы",
+                    content: "Мой комментарий"
+                )
+            ]
+        ),
+        viewModel: TaskViewModel()
+    )
 }
