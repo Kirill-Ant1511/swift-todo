@@ -96,7 +96,9 @@ class TaskViewModel: ObservableObject {
     func addCommentToTask(taskId: UUID, content: String) async {
         let request = CreateCommentRequest(
             content: content,
-            ownerId: currentUserId
+            ownerId: currentUserId,
+            taskId: taskId
+            
         )
         
         do {
